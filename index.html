@@ -1,6 +1,6 @@
         <!-- const API_KEY = 'AIzaSyAiVXf4Sun5S4Zc3vh81ej_ROKBJ6RvYPE';
         const SHEET_ID = '1lp0ukKNb4y-xGqVV-vR1ZuSHVJaPqomyBnVrKn9o7EM';
-        const RANGE = 'MMP_Receipt!A1:F';
+        const RANGE = 'MMP_Receipt!C1:J'; // Updated to match new column range (C to J)
          -->
         
 <!DOCTYPE html>
@@ -8,6 +8,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Permissions-Policy" content="web-share=(self)">
     <title>PDF Reviewer</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
@@ -24,7 +25,9 @@
                         <th class="py-2 px-4 border">Amount</th>
                         <th class="py-2 px-4 border">Date</th>
                         <th class="py-2 px-4 border">Purpose</th>
+                        <th class="py-2 px-4 border">Remarks</th>
                         <th class="py-2 px-4 border">Receipt Number</th>
+                        <th class="py-2 px-4 border">Amount in Words</th>
                         <th class="py-2 px-4 border">PDF Link</th>
                     </tr>
                 </thead>
@@ -51,9 +54,10 @@
     <script>
         const API_KEY = 'AIzaSyAiVXf4Sun5S4Zc3vh81ej_ROKBJ6RvYPE';
         const SHEET_ID = '1lp0ukKNb4y-xGqVV-vR1ZuSHVJaPqomyBnVrKn9o7EM';
-        const RANGE = 'MMP_Receipt!A1:F';
+        const RANGE = 'MMP_Receipt!C1:J'; // Updated to match new column range (C to J)
 
         let currentPdfUrl = '';
+        let currentReceiptNumber = '';
 
         async function fetchSheetData() {
             const loading = document.getElementById('loading');
@@ -93,14 +97,16 @@
                 const row = values[i];
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td class="py-2 px-4 border">${row[0] || ''}</td> <!-- Name -->
-                    <td class="py-2 px-4 border">${row[1] || ''}</td> <!-- Amount -->
-                    <td class="py-2 px-4 border">${row[2] || ''}</td> <!-- Date -->
-                    <td class="py-2 px-4 border">${row[3] || ''}</td> <!-- Purpose -->
-                    <td class="py-2 px-4 border">${row[5] || ''}</td> <!-- Receipt Number -->
+                    <td class="py-2 px-4 border">${row[0] || ''}</td> <!-- Name (C) -->
+                    <td class="py-2 px-4 border">${row[1] || ''}</td> <!-- Amount (D) -->
+                    <td class="py-2 px-4 border">${row[2] || ''}</td> <!-- Date (E) -->
+                    <td class="py-2 px-4 border">${row[3] || ''}</td> <!-- Purpose (F) -->
+                    <td class="py-2 px-4 border">${row[4] || ''}</td> <!-- Remarks (G) -->
+                    <td class="py-2 px-4 border">${row[6] || ''}</td> <!-- Receipt Number (I) -->
+                    <td class="py-2 px-4 border">${row[7] || ''}</td> <!-- Amount in Words (J) -->
                     <td class="py-2 px-4 border">
-                        ${row[4] ? `<a href="#" class="text-blue-500 view-pdf" data-url="${row[4]}">View PDF</a>` : 'No PDF'}
-                    </td> <!-- pdf_Url -->
+                        ${row[5] ? `<a href="#" class="text-blue-500 view-pdf" data-url="${row[5]}" data-receipt="${row[6] || ''}">View PDF</a>` : 'No PDF'}
+                    </td> <!-- pdf_Url (H) -->
                 `;
                 tableBody.appendChild(tr);
             }
@@ -109,6 +115,7 @@
                 link.addEventListener('click', (e) => {
                     e.preventDefault();
                     const pdfUrl = e.target.getAttribute('data-url');
+                    currentReceiptNumber = e.target.getAttribute('data-receipt');
                     displayPDF(pdfUrl);
                 });
             });
@@ -120,7 +127,6 @@
             const pdfError = document.getElementById('pdf-error');
             const shareStatus = document.getElementById('share-status');
 
-            // Store the current PDF URL for sharing
             currentPdfUrl = url;
             
             console.log('Attempting to load PDF from:', url);
@@ -149,7 +155,6 @@
             shareStatus.classList.add('hidden');
             pdfError.classList.add('hidden');
 
-            // Reset event handlers
             pdfFrame.onload = () => {
                 pdfError.classList.add('hidden');
             };
@@ -159,26 +164,50 @@
             };
         }
 
-        function sharePDF() {
+        async function sharePDF() {
             const shareStatus = document.getElementById('share-status');
-            
-            if (navigator.share && currentPdfUrl) {
-                // Use Web Share API (mobile-friendly)
-                navigator.share({
-                    title: 'PDF Receipt',
-                    text: 'Check out this receipt PDF',
-                    url: currentPdfUrl
-                }).then(() => {
-                    console.log('PDF shared successfully');
-                }).catch((error) => {
-                    console.log('Error sharing:', error);
-                    // Fallback to copy URL if sharing fails
-                    copyUrlToClipboard();
-                });
-            } else {
-                // Fallback: Copy URL to clipboard
-                copyUrlToClipboard();
+            shareStatus.classList.add('hidden');
+
+            if (!currentPdfUrl) {
+                shareStatus.textContent = 'No PDF loaded to share.';
+                shareStatus.className = 'mt-2 text-red-500';
+                shareStatus.classList.remove('hidden');
+                return;
             }
+
+            const shareData = {
+                title: `Receipt ${currentReceiptNumber || 'PDF'}`,
+                text: `Check this receipt PDF: ${currentPdfUrl} `,
+                url: currentPdfUrl
+            };
+
+            console.log('Share data:', shareData);
+            console.log('navigator.share available:', navigator.share);
+            console.log('navigator.canShare available:', navigator.canShare);
+
+            if (navigator.canShare && navigator.canShare({ title: shareData.title, text: shareData.text, url: shareData.url })) {
+                if (navigator.share) {
+                    try {
+                        await navigator.share(shareData);
+                        shareStatus.textContent = 'Shared successfully!';
+                        shareStatus.className = 'mt-2 text-green-600';
+                        shareStatus.classList.remove('hidden');
+                        setTimeout(() => shareStatus.classList.add('hidden'), 3000);
+                        return;
+                    } catch (error) {
+                        console.error('Share failed:', error);
+                        if (error.name === 'AbortError' || error.name === 'NotAllowedError') {
+                            shareStatus.textContent = 'Share blocked (try refreshing). Copied to clipboard instead.';
+                            shareStatus.className = 'mt-2 text-yellow-600';
+                            shareStatus.classList.remove('hidden');
+                            copyUrlToClipboard();
+                            return;
+                        }
+                    }
+                }
+            }
+
+            copyUrlToClipboard();
         }
 
         function copyUrlToClipboard() {
@@ -186,55 +215,50 @@
             
             if (navigator.clipboard && currentPdfUrl) {
                 navigator.clipboard.writeText(currentPdfUrl).then(() => {
-                    shareStatus.textContent = 'PDF URL copied to clipboard! You can now paste it in WhatsApp, Email, or any other app.';
-                    shareStatus.className = 'mt-2 text-green-600 hidden false';
+                    shareStatus.textContent = 'PDF URL copied! Paste in WhatsApp, Email, or any app.';
+                    shareStatus.className = 'mt-2 text-green-600';
                     shareStatus.classList.remove('hidden');
-                    
-                    // Hide status after 5 seconds
-                    setTimeout(() => {
-                        shareStatus.classList.add('hidden');
-                    }, 5000);
+                    setTimeout(() => shareStatus.classList.add('hidden'), 5000);
                 }).catch((error) => {
-                    console.error('Error copying URL:', error);
-                    shareStatus.textContent = 'Failed to copy URL. Please copy this manually: ' + currentPdfUrl;
-                    shareStatus.className = 'mt-2 text-red-500 hidden false';
-                    shareStatus.classList.remove('hidden');
+                    console.error('Clipboard error:', error);
+                    fallbackCopy();
                 });
             } else {
-                // Legacy fallback: Create a temporary input to copy
-                const textArea = document.createElement('textarea');
-                textArea.value = currentPdfUrl;
-                document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
-                
-                try {
-                    document.execCommand('copy');
-                    shareStatus.textContent = 'PDF URL copied to clipboard! You can now paste it in WhatsApp, Email, or any other app.';
-                    shareStatus.className = 'mt-2 text-green-600 hidden false';
-                    shareStatus.classList.remove('hidden');
-                    
-                    setTimeout(() => {
-                        shareStatus.classList.add('hidden');
-                    }, 5000);
-                } catch (err) {
-                    console.error('Fallback copy failed:', err);
-                    shareStatus.textContent = 'Failed to copy URL. Please copy this manually: ' + currentPdfUrl;
-                    shareStatus.className = 'mt-2 text-red-500 hidden false';
-                    shareStatus.classList.remove('hidden');
-                }
-                
-                document.body.removeChild(textArea);
+                fallbackCopy();
             }
+        }
+
+        function fallbackCopy() {
+            const shareStatus = document.getElementById('share-status');
+            const textArea = document.createElement('textarea');
+            textArea.value = currentPdfUrl;
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                shareStatus.textContent = 'PDF URL copied! Paste in WhatsApp, Email, or any app.';
+                shareStatus.className = 'mt-2 text-green-600';
+                shareStatus.classList.remove('hidden');
+                setTimeout(() => shareStatus.classList.add('hidden'), 5000);
+            } catch (err) {
+                console.error('Copy failed:', err);
+                shareStatus.textContent = `Failed to copy. Manual copy: ${currentPdfUrl}`;
+                shareStatus.className = 'mt-2 text-red-500';
+                shareStatus.classList.remove('hidden');
+            }
+            
+            document.body.removeChild(textArea);
         }
 
         function closePDFViewer() {
             const pdfViewer = document.getElementById('pdf-viewer');
             pdfViewer.classList.add('hidden');
             currentPdfUrl = '';
+            currentReceiptNumber = '';
         }
 
-        // Event listeners for share and close buttons
         document.addEventListener('DOMContentLoaded', function() {
             const shareBtn = document.getElementById('share-pdf-btn');
             const closeBtn = document.getElementById('close-pdf-btn');
